@@ -1,20 +1,28 @@
-# app/scrapers/squareyard.py
 import time
 import json
+import requests
 from bs4 import BeautifulSoup
 from app.utils.chrome_driver import get_chrome_driver
 
 def get_lat_lon(details_url):
-    driver = get_chrome_driver()
-    driver.get(details_url)
-    time.sleep(3)
-    sp = BeautifulSoup(driver.page_source, 'html.parser')
+    headers = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/91.0.4472.124 Safari/537.36')
+    }
+    response = requests.get(details_url, headers=headers)
+    if response.status_code != 200:
+        print("Failed to retrieve the webpage:", details_url)
+        return None, None
+
+    sp = BeautifulSoup(response.text, 'html.parser')
     lat, lon = None, None
-    loc_items = sp.find_all('li', class_='locatedLi')
-    if loc_items:
-        lat = loc_items[0].get('data-latitude')
-        lon = loc_items[0].get('data-longitude')
-    driver.quit()
+    ul = sp.find('ul', class_='nearLocation scrollBarHide')
+    if ul:
+        li = ul.find('li', class_='locatedLi')
+        if li:
+            lat = li.get('data-latitude')
+            lon = li.get('data-longitude')
     return lat, lon
 
 def scrape_squareyard(city: str, locality: str, page: int = 1):
