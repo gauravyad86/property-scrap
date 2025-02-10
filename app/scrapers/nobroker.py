@@ -1,14 +1,14 @@
-# app/scrapers/nobroker.py
 import time
 import json
 import base64
 import requests
+import os
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.options import Options
 from app.utils.chrome_driver import get_chrome_driver
 
-GOOGLE_API_KEY = "AIzaSyA"  # Use your valid API key
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_place_details(city, locality):
     search_query = f"{locality}, {city}"
@@ -58,9 +58,6 @@ def extract_lat_lon_from_nobroker(property_url):
     return None, None
 
 def scrape_nobroker(city: str, locality: str, page: int = 1):
-    """Scrapes NoBroker listings for given city and locality.
-    Returns 10 properties based on the requested page.
-    """
     url = get_nobroker_url(city, locality)
     if not url:
         return []
@@ -69,8 +66,6 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
     SCROLL_PAUSE_TIME = 2
     properties = []
     last_height = driver.execute_script("return document.body.scrollHeight")
-    
-    # Scroll until we collect at least page*10 properties or no more scrolling available.
     while len(properties) < page * 10:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(SCROLL_PAUSE_TIME)
@@ -79,7 +74,6 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
             break
         last_height = new_height
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        # Parse property cards (adjust the class names as necessary)
         for card in soup.find_all('div', class_='nb__2_XSE'):
             if len(properties) >= page * 10:
                 break
@@ -121,9 +115,7 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
                     'image': image
                 }
                 properties.append(property_details)
-    
     driver.quit()
-    # Return only the slice corresponding to the page
     start = (page - 1) * 10
     end = page * 10
     return properties[start:end]
