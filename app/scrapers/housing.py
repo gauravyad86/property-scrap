@@ -1,4 +1,3 @@
-# app/scrapers/housing.py
 import time
 import json
 import requests
