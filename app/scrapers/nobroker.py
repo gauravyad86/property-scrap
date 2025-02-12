@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.options import Options
 from app.utils.chrome_driver import get_chrome_driver
 
-GOOGLE_API_KEY = "AIzaSyDDUhPW1AuqWxqi6jeMsCMJ5bPc7pOMj4E"
+GOOGLE_API_KEY = GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_place_details(city, locality):
     search_query = f"{locality}, {city}"
