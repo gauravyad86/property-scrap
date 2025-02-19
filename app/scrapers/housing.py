@@ -46,7 +46,7 @@ def extract_lat_lon_second_image(url):
     return latitude, longitude, second_image
 
 def scrape_housing(city: str, locality: str, page: int = 1):
-    desired_count = page * 500
+    desired_count = page * 250
     properties = []
     current_site_page = 1
     while len(properties) < desired_count:
@@ -111,6 +111,6 @@ def scrape_housing(city: str, locality: str, page: int = 1):
             break
         properties.extend(page_properties)
         current_site_page += 1
-    start = (page - 1) * 500
-    end = page * 500
+    start = (page - 1) * 250
+    end = page * 250
     return properties[start:end]
