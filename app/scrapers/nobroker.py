@@ -5,10 +5,9 @@ import requests
 import os
 from urllib.parse import quote
 from bs4 import BeautifulSoup
-from selenium.webdriver.chrome.options import Options
 from app.utils.chrome_driver import get_chrome_driver
 
-GOOGLE_API_KEY = GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_place_details(city, locality):
     search_query = f"{locality}, {city}"
@@ -61,12 +60,13 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
     url = get_nobroker_url(city, locality)
     if not url:
         return []
+    desired_count = page * 100
+    properties = []
     driver = get_chrome_driver()
     driver.get(url)
     SCROLL_PAUSE_TIME = 2
-    properties = []
     last_height = driver.execute_script("return document.body.scrollHeight")
-    while len(properties) < page * 10:
+    while len(properties) < desired_count:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(SCROLL_PAUSE_TIME)
         new_height = driver.execute_script("return document.body.scrollHeight")
@@ -75,26 +75,35 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
         last_height = new_height
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         for card in soup.find_all('div', class_='nb__2_XSE'):
-            if len(properties) >= page * 10:
+            if len(properties) >= desired_count:
                 break
-            name = card.find('h2', class_='heading-6').text if card.find('h2', class_='heading-6') else None
-            address = card.find('div', class_='text-gray-light').text if card.find('div', class_='text-gray-light') else None
-            link = card.find('a', href=True)['href'] if card.find('a', href=True) else None
-            price = card.find('div', class_='font-semi-bold heading-6').text if card.find('div', class_='font-semi-bold heading-6') else None
-            per_sqft_price = card.find('div', class_='heading-7').text if card.find('div', class_='heading-7') else None
-            emi = card.find('div', class_='heading-6', id='roomType').text if card.find('div', class_='heading-6', id='roomType') else None
-            built_up = card.find('div', class_='flex', id='unitCode').text if card.find('div', class_='flex', id='unitCode') else None
-            facing = card.find('div', class_='font-semibold').text if card.find('div', class_='font-semibold') else None
-            apartment_type = card.find('div', class_='font-semibold', string='Apartment Type')
-            apartment_type = apartment_type.find_previous('div').text if apartment_type else None
-            bathrooms = card.find('div', class_='font-semibold', string='Bathrooms')
-            bathrooms = bathrooms.find_previous('div').text if bathrooms else None
-            parking = card.find('div', class_='font-semibold', string='Parking')
-            parking = parking.find_previous('div').text if parking else None
+            name_tag = card.find('h2', class_='heading-6')
+            name = name_tag.text if name_tag else None
+            address_tag = card.find('div', class_='text-gray-light')
+            address = address_tag.text if address_tag else None
+            link_tag = card.find('a', href=True)
+            link = link_tag['href'] if link_tag else None
+            price_tag = card.find('div', class_='font-semi-bold heading-6')
+            price = price_tag.text if price_tag else None
+            per_sqft_tag = card.find('div', class_='heading-7')
+            per_sqft_price = per_sqft_tag.text if per_sqft_tag else None
+            emi_tag = card.find('div', class_='heading-6', id='roomType')
+            emi = emi_tag.text if emi_tag else None
+            built_up_tag = card.find('div', class_='flex', id='unitCode')
+            built_up = built_up_tag.text if built_up_tag else None
+            facing_tag = card.find('div', class_='font-semibold')
+            facing = facing_tag.text if facing_tag else None
+            apt_type_label = card.find('div', class_='font-semibold', string='Apartment Type')
+            apartment_type = apt_type_label.find_previous('div').text if apt_type_label else None
+            bathrooms_label = card.find('div', class_='font-semibold', string='Bathrooms')
+            bathrooms = bathrooms_label.find_previous('div').text if bathrooms_label else None
+            parking_label = card.find('div', class_='font-semibold', string='Parking')
+            parking = parking_label.find_previous('div').text if parking_label else None
             image = None
-            if card.find('meta', itemprop='image'):
-                image_meta = card.find('meta', itemprop='image')['content']
-                image = f"https://images.nobroker.in/images/{image_meta}" if image_meta else None
+            image_meta = card.find('meta', itemprop='image')
+            if image_meta:
+                image_content = image_meta.get('content')
+                image = f"https://images.nobroker.in/images/{image_content}" if image_content else None
             if name and address and link:
                 full_link = f"https://www.nobroker.in{link}"
                 latitude, longitude = extract_lat_lon_from_nobroker(full_link)
@@ -116,6 +125,6 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
                 }
                 properties.append(property_details)
     driver.quit()
-    start = (page - 1) * 10
-    end = page * 10
+    start = (page - 1) * 100
+    end = page * 100
     return properties[start:end]
