@@ -2,6 +2,7 @@ import time
 import json
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 from app.utils.chrome_driver import get_chrome_driver
 
 def get_lat_lon(details_url):
@@ -23,8 +24,8 @@ def get_lat_lon(details_url):
             lon = li.get('data-longitude')
     return lat, lon
 
-def scrape_squareyard(city: str, locality: str, page: int = 1):
-    desired_count = page * 100
+def scrape_squareyard(city: str, locality: str):
+    desired_count = 500
     properties = []
     current_site_page = 1
     while len(properties) < desired_count:
@@ -59,19 +60,32 @@ def scrape_squareyard(city: str, locality: str, page: int = 1):
             image_link = (img_tag.get('src') or img_tag.get('data-src')) if img_tag else None
             details_link_tag = listing.find('a', href=True)
             details_link = details_link_tag['href'] if details_link_tag else None
-            property_details = {
+            listing_obj = {
+                'city': city,
+                'locality': locality,
                 'name': name,
-                'location': location,
-                'type_name': type_name,
+                'address': location,
+                'link': details_link,
                 'price': price,
-                'built_up_area': built_up_area,
-                'possession_status': possession_status,
+                'perSqftPrice': None,
+                'emi': None,
+                'builtUp': built_up_area,
+                'facing': None,
+                'apartmentType': type_name,
+                'bathrooms': None,
+                'parking': None,
+                'image': [image_link] if image_link else None,
+                'latitude': None,
+                'longitude': None,
+                'possessionStatus': possession_status,
+                'possessionDate': None,
+                'agentName': agent_name,
                 'description': description,
-                'agent_name': agent_name,
-                'image_link': image_link,
-                'details_link': details_link
+                'source': "squareyard",
+                'createdAt': datetime.now().isoformat(),
+                'updatedAt': datetime.now().isoformat()
             }
-            page_properties.append(property_details)
+            page_properties.append(listing_obj)
         scrollable_listings = soup.find_all('div', class_='npListingTile')
         for listing in scrollable_listings:
             name_tag = listing.find('h2', class_='npListingLink')
@@ -98,22 +112,36 @@ def scrape_squareyard(city: str, locality: str, page: int = 1):
                     parts = onclick_value.split("'")
                     if len(parts) > 1:
                         details_link = parts[1]
-            property_details = {
+            listing_obj = {
+                'city': city,
+                'locality': locality,
                 'name': name,
-                'location': location,
+                'address': location,
+                'link': details_link,
                 'price': price,
-                'built_up_area': built_up_area,
-                'possession_status': possession_status,
+                'perSqftPrice': None,
+                'emi': None,
+                'builtUp': built_up_area,
+                'facing': None,
+                'apartmentType': None,
+                'bathrooms': None,
+                'parking': None,
+                'image': [image_link] if image_link else None,
+                'latitude': None,
+                'longitude': None,
+                'possessionStatus': possession_status,
+                'possessionDate': None,
+                'agentName': agent_name,
                 'description': description,
-                'agent_name': agent_name,
-                'image_link': image_link,
-                'details_link': details_link
+                'source': "squareyard",
+                'createdAt': datetime.now().isoformat(),
+                'updatedAt': datetime.now().isoformat()
             }
-            page_properties.append(property_details)
+            page_properties.append(listing_obj)
         driver.quit()
         for prop in page_properties:
-            if prop.get('details_link'):
-                lat, lon = get_lat_lon(prop['details_link'])
+            if prop.get('link'):
+                lat, lon = get_lat_lon(prop['link'])
             else:
                 lat, lon = None, None
             prop['latitude'] = lat
@@ -122,6 +150,4 @@ def scrape_squareyard(city: str, locality: str, page: int = 1):
             break
         properties.extend(page_properties)
         current_site_page += 1
-    start = (page - 1) * 100
-    end = page * 100
-    return properties[start:end]
+    return properties[:desired_count]
