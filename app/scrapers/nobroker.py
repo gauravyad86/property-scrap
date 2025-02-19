@@ -5,12 +5,12 @@ import requests
 import os
 from urllib.parse import quote
 from bs4 import BeautifulSoup
+from datetime import datetime
 from app.utils.chrome_driver import get_chrome_driver
-
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_place_details(city, locality):
     search_query = f"{locality}, {city}"
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     api_url = (
         "https://maps.googleapis.com/maps/api/place/findplacefromtext/json"
         f"?input={quote(search_query)}&inputtype=textquery&fields=geometry,place_id&key={GOOGLE_API_KEY}"
@@ -56,11 +56,11 @@ def extract_lat_lon_from_nobroker(property_url):
             return latitude_meta["content"], longitude_meta["content"]
     return None, None
 
-def scrape_nobroker(city: str, locality: str, page: int = 1):
+def scrape_nobroker(city: str, locality: str):
     url = get_nobroker_url(city, locality)
     if not url:
         return []
-    desired_count = page * 100
+    desired_count = 500
     properties = []
     driver = get_chrome_driver()
     driver.get(url)
@@ -96,7 +96,11 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
             apt_type_label = card.find('div', class_='font-semibold', string='Apartment Type')
             apartment_type = apt_type_label.find_previous('div').text if apt_type_label else None
             bathrooms_label = card.find('div', class_='font-semibold', string='Bathrooms')
-            bathrooms = bathrooms_label.find_previous('div').text if bathrooms_label else None
+            bathrooms_text = bathrooms_label.find_previous('div').text if bathrooms_label else None
+            try:
+                bathrooms = int(bathrooms_text) if bathrooms_text and bathrooms_text.isdigit() else None
+            except Exception:
+                bathrooms = None
             parking_label = card.find('div', class_='font-semibold', string='Parking')
             parking = parking_label.find_previous('div').text if parking_label else None
             image = None
@@ -107,24 +111,31 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
             if name and address and link:
                 full_link = f"https://www.nobroker.in{link}"
                 latitude, longitude = extract_lat_lon_from_nobroker(full_link)
-                property_details = {
+                listing = {
+                    'city': city,
+                    'locality': locality,
                     'name': name,
                     'address': address,
                     'link': full_link,
-                    'latitude': latitude,
-                    'longitude': longitude,
                     'price': price,
-                    'per_sqft_price': per_sqft_price,
+                    'perSqftPrice': per_sqft_price,
                     'emi': emi,
-                    'built_up': built_up,
+                    'builtUp': built_up,
                     'facing': facing,
-                    'apartment_type': apartment_type,
+                    'apartmentType': apartment_type,
                     'bathrooms': bathrooms,
                     'parking': parking,
-                    'image': image
+                    'image': [image] if image else None,
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'possessionStatus': None,
+                    'possessionDate': None,
+                    'agentName': None,
+                    'description': None,
+                    'source': "nobroker",
+                    'createdAt': datetime.now().isoformat(),
+                    'updatedAt': datetime.now().isoformat()
                 }
-                properties.append(property_details)
+                properties.append(listing)
     driver.quit()
-    start = (page - 1) * 100
-    end = page * 100
-    return properties[start:end]
+    return properties[:desired_count]
