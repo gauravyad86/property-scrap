@@ -5,16 +5,18 @@ from urllib.parse import quote
 from bs4 import BeautifulSoup
 from app.utils.chrome_driver import get_chrome_driver
 
-def generate_housing_url(city, locality):
+def generate_housing_url(city, locality, page=1):
     city_encoded = quote(city.replace(" ", "_").lower())
     locality_encoded = quote(locality.replace(" ", "_").lower())
-    return f"https://housing.com/in/buy/{city_encoded}/{locality_encoded}"
+    url = f"https://housing.com/in/buy/{city_encoded}/{locality_encoded}"
+    if page > 1:
+        url += f"?page={page}"
+    return url
 
 def extract_lat_lon_second_image(url):
     response = requests.get(url)
     if response.status_code != 200:
         return None, None, None
-
     soup = BeautifulSoup(response.text, 'html.parser')
     json_script = soup.find("script", {"type": "application/ld+json"})
     latitude = longitude = None
@@ -33,7 +35,6 @@ def extract_lat_lon_second_image(url):
                     longitude = json_data["geo"].get("longitude")
         except Exception:
             pass
-
     second_image = None
     gallery_section = soup.find("div", {"data-q": "gallery"})
     if gallery_section:
@@ -42,71 +43,69 @@ def extract_lat_lon_second_image(url):
             second_image = all_images[1]["src"]
             if second_image.startswith("//"):
                 second_image = "https:" + second_image
-
     return latitude, longitude, second_image
 
 def scrape_housing(city: str, locality: str, page: int = 1):
-    """Scrapes Housing.com listings for given city and locality.
-    Returns 10 properties based on the requested page.
-    """
-    url = generate_housing_url(city, locality)
-    driver = get_chrome_driver()
-    driver.get(url)
-    SCROLL_PAUSE_TIME = 2
-
-    # Scroll a few times to load listings; adjust the count if necessary.
-    for _ in range(10):
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(SCROLL_PAUSE_TIME)
-
-    # Force images to load if they are lazy-loaded.
-    driver.execute_script("""
-        let images = document.querySelectorAll('img');
-        images.forEach(img => {
-            if (img.getAttribute('data-src')) {
-                img.setAttribute('src', img.getAttribute('data-src'));
-            }
-        });
-    """)
-    time.sleep(2)
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    desired_count = page * 100
     properties = []
-    
-    for card in soup.find_all('article', {'data-testid': 'card-container'}):
-        # Stop if we already have enough for the requested page
-        if len(properties) >= page * 10:
+    current_site_page = 1
+    while len(properties) < desired_count:
+        url = generate_housing_url(city, locality, current_site_page)
+        driver = get_chrome_driver()
+        driver.get(url)
+        SCROLL_PAUSE_TIME = 2
+        for _ in range(10):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(SCROLL_PAUSE_TIME)
+        driver.execute_script("""
+            let images = document.querySelectorAll('img');
+            images.forEach(img => {
+                if (img.getAttribute('data-src')) {
+                    img.setAttribute('src', img.getAttribute('data-src'));
+                }
+            });
+        """)
+        time.sleep(2)
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        page_properties = []
+        for card in soup.find_all('article', {'data-testid': 'card-container'}):
+            if len(page_properties) >= desired_count:
+                break
+            name_tag = card.find('h2', class_='T_4d93cd45')
+            name = name_tag.text if name_tag else None
+            emi_tag = card.find('span', class_='_9jtlke')
+            emi_starts = emi_tag.text if emi_tag else None
+            price_tag = card.find('div', {'data-testid': 'priceid'})
+            price = price_tag.text if price_tag else None
+            by_tag = card.find('div', class_='_c81fwx')
+            by = by_tag.text if by_tag else None
+            link_tag = card.find('a', {'data-q': 'title'}, href=True)
+            link = link_tag['href'] if link_tag else None
+            possession_date = None
+            avg_price = None
+            possession_status = None
+            full_link = f"https://housing.com{link}" if link else None
+            latitude, longitude, image = extract_lat_lon_second_image(full_link) if full_link else (None, None, None)
+            if name and link:
+                property_details = {
+                    'name': name,
+                    'emi_starts': emi_starts,
+                    'price': price,
+                    'by': by,
+                    'link': full_link,
+                    'possession_date': possession_date,
+                    'avg_price': avg_price,
+                    'possession_status': possession_status,
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'image': image
+                }
+                page_properties.append(property_details)
+        driver.quit()
+        if not page_properties:
             break
-        name = card.find('h2', class_='T_4d93cd45').text if card.find('h2', class_='T_4d93cd45') else None
-        emi_starts = card.find('span', class_='_9jtlke').text if card.find('span', class_='_9jtlke') else None
-        price = card.find('div', {'data-testid': 'priceid'}).text if card.find('div', {'data-testid': 'priceid'}) else None
-        by = card.find('div', class_='_c81fwx').text if card.find('div', class_='_c81fwx') else None
-        link = card.find('a', {'data-q': 'title'}, href=True)
-        link = link['href'] if link else None
-        possession_date = None
-        avg_price = None
-        possession_status = None
-        # You can add logic to extract possession_date, avg_price, etc. if needed.
-        
-        full_link = f"https://housing.com{link}" if link else None
-        latitude, longitude, image = extract_lat_lon_second_image(full_link) if full_link else (None, None, None)
-        if name and link:
-            property_details = {
-                'name': name,
-                'emi_starts': emi_starts,
-                'price': price,
-                'by': by,
-                'link': full_link,
-                'possession_date': possession_date,
-                'avg_price': avg_price,
-                'possession_status': possession_status,
-                'latitude': latitude,
-                'longitude': longitude,
-                'image': image
-            }
-            properties.append(property_details)
-    
-    driver.quit()
-    # Return only the slice corresponding to the page
-    start = (page - 1) * 10
-    end = page * 10
+        properties.extend(page_properties)
+        current_site_page += 1
+    start = (page - 1) * 100
+    end = page * 100
     return properties[start:end]
