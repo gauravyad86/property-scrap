@@ -3,7 +3,6 @@ import json
 import requests
 from urllib.parse import quote
 from bs4 import BeautifulSoup
-from datetime import datetime
 from app.utils.chrome_driver import get_chrome_driver
 
 def generate_housing_url(city, locality, page=1):
@@ -46,8 +45,8 @@ def extract_lat_lon_second_image(url):
                 second_image = "https:" + second_image
     return latitude, longitude, second_image
 
-def scrape_housing(city: str, locality: str):
-    desired_count = 500
+def scrape_housing(city: str, locality: str, page: int = 1):
+    desired_count = page * 500
     properties = []
     current_site_page = 1
     while len(properties) < desired_count:
@@ -75,45 +74,43 @@ def scrape_housing(city: str, locality: str):
             name_tag = card.find('h2', class_='T_4d93cd45')
             name = name_tag.text if name_tag else None
             emi_tag = card.find('span', class_='_9jtlke')
-            emi_starts = emi_tag.text if emi_tag else None
+            emi = emi_tag.text if emi_tag else None
             price_tag = card.find('div', {'data-testid': 'priceid'})
             price = price_tag.text if price_tag else None
             link_tag = card.find('a', {'data-q': 'title'}, href=True)
             link = link_tag['href'] if link_tag else None
-            possession_date = None
-            possession_status = None
             full_link = f"https://housing.com{link}" if link else None
-            latitude, longitude, image = extract_lat_lon_second_image(full_link) if full_link else (None, None, None)
-            if name and link:
-                listing = {
-                    'city': city,
-                    'locality': locality,
-                    'name': name,
-                    'address': None,
-                    'link': full_link,
-                    'price': price,
-                    'perSqftPrice': None,
-                    'emi': emi_starts,
-                    'builtUp': None,
-                    'facing': None,
-                    'apartmentType': None,
-                    'bathrooms': None,
-                    'parking': None,
-                    'image': [image] if image else None,
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'possessionStatus': possession_status,
-                    'possessionDate': possession_date,
-                    'agentName': None,
-                    'description': None,
-                    'source': "housing",
-                    'createdAt': datetime.now().isoformat(),
-                    'updatedAt': datetime.now().isoformat()
+            latitude, longitude, image_url = extract_lat_lon_second_image(full_link) if full_link else (None, None, None)
+            if name and full_link:
+                property_details = {
+                    "city": city,
+                    "locality": locality,
+                    "name": name,
+                    "address": None,
+                    "link": full_link,
+                    "price": price,
+                    "perSqftPrice": None,
+                    "emi": emi,
+                    "builtUp": None,
+                    "facing": None,
+                    "apartmentType": None,
+                    "bathrooms": None,
+                    "parking": None,
+                    "image": [image_url] if image_url else None,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "possessionStatus": None,
+                    "possessionDate": None,
+                    "agentName": None,
+                    "description": None,
+                    "source": "housing"
                 }
-                page_properties.append(listing)
+                page_properties.append(property_details)
         driver.quit()
         if not page_properties:
             break
         properties.extend(page_properties)
         current_site_page += 1
-    return properties[:desired_count]
+    start = (page - 1) * 500
+    end = page * 500
+    return properties[start:end]
