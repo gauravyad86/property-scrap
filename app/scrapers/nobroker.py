@@ -60,7 +60,7 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
     url = get_nobroker_url(city, locality)
     if not url:
         return []
-    desired_count = page * 500
+    desired_count = page * 250
     properties = []
     driver = get_chrome_driver()
     driver.get(url)
@@ -132,6 +132,6 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
                 }
                 properties.append(property_details)
     driver.quit()
-    start = (page - 1) * 500
-    end = page * 500
+    start = (page - 1) * 250
+    end = page * 250
     return properties[start:end]
