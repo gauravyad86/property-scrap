@@ -24,10 +24,9 @@ def get_lat_lon(details_url):
     return lat, lon
 
 def scrape_squareyard(city: str, locality: str, page: int = 1):
-    desired_count = page * 250
     properties = []
     current_site_page = 1
-    while len(properties) < desired_count:
+    while True:
         city_slug = city.lower().replace(" ", "-")
         locality_slug = locality.lower().replace(" ", "-")
         base_url = f"https://www.squareyards.com/sale/property-for-sale-in-{locality_slug}-{city_slug}"
@@ -134,6 +133,8 @@ def scrape_squareyard(city: str, locality: str, page: int = 1):
             }
             page_properties.append(property_details)
         driver.quit()
+        if not page_properties:
+            break
         for prop in page_properties:
             if prop.get('link'):
                 lat, lon = get_lat_lon(prop['link'])
@@ -141,10 +142,9 @@ def scrape_squareyard(city: str, locality: str, page: int = 1):
                 lat, lon = None, None
             prop['latitude'] = lat
             prop['longitude'] = lon
-        if not page_properties:
-            break
         properties.extend(page_properties)
         current_site_page += 1
-    start = (page - 1) * 250
-    end = page * 250
+    page_size = 10
+    start = (page - 1) * page_size
+    end = page * page_size
     return properties[start:end]
