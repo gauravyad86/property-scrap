@@ -46,10 +46,9 @@ def extract_lat_lon_second_image(url):
     return latitude, longitude, second_image
 
 def scrape_housing(city: str, locality: str, page: int = 1):
-    desired_count = page * 250
     properties = []
     current_site_page = 1
-    while len(properties) < desired_count:
+    while True:
         url = generate_housing_url(city, locality, current_site_page)
         driver = get_chrome_driver()
         driver.get(url)
@@ -69,8 +68,6 @@ def scrape_housing(city: str, locality: str, page: int = 1):
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         page_properties = []
         for card in soup.find_all('article', {'data-testid': 'card-container'}):
-            if len(page_properties) >= desired_count:
-                break
             name_tag = card.find('h2', class_='T_4d93cd45')
             name = name_tag.text if name_tag else None
             emi_tag = card.find('span', class_='_9jtlke')
@@ -111,6 +108,7 @@ def scrape_housing(city: str, locality: str, page: int = 1):
             break
         properties.extend(page_properties)
         current_site_page += 1
-    start = (page - 1) * 250
-    end = page * 250
+    page_size = 10
+    start = (page - 1) * page_size
+    end = page * page_size
     return properties[start:end]
