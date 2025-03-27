@@ -60,13 +60,12 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
     url = get_nobroker_url(city, locality)
     if not url:
         return []
-    desired_count = page * 250
     properties = []
     driver = get_chrome_driver()
     driver.get(url)
     SCROLL_PAUSE_TIME = 2
     last_height = driver.execute_script("return document.body.scrollHeight")
-    while len(properties) < desired_count:
+    while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(SCROLL_PAUSE_TIME)
         new_height = driver.execute_script("return document.body.scrollHeight")
@@ -74,9 +73,8 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
             break
         last_height = new_height
         soup = BeautifulSoup(driver.page_source, 'html.parser')
+        page_properties = []
         for card in soup.find_all('div', class_='nb__2_XSE'):
-            if len(properties) >= desired_count:
-                break
             name_tag = card.find('h2', class_='heading-6')
             name = name_tag.text if name_tag else None
             address_tag = card.find('div', class_='text-gray-light')
@@ -130,8 +128,12 @@ def scrape_nobroker(city: str, locality: str, page: int = 1):
                     "description": None,
                     "source": "nobroker"
                 }
-                properties.append(property_details)
+                page_properties.append(property_details)
+        if not page_properties:
+            break
+        properties.extend(page_properties)
     driver.quit()
-    start = (page - 1) * 250
-    end = page * 250
+    page_size = 10
+    start = (page - 1) * page_size
+    end = page * page_size
     return properties[start:end]
